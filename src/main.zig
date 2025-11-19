@@ -193,6 +193,9 @@ fn drawCenteredText(text: [:0]const u8, font_size: i32, y: i32) void {
 //    * add jump sound
 //    * add score
 //    * add more speed when the dino jump over a cactus
+//    * investigate
+//      * Entity Component System
+//      * Entity Map
 pub fn main() !void {
     rl.initWindow(WWIDTH, WHEIGHT, "google dino clone?");
     const dino_texture = try rl.loadTexture("dino.png");
