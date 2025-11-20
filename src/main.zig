@@ -188,6 +188,7 @@ fn drawCenteredText(text: [:0]const u8, font_size: i32, y: i32) void {
 // TODO:
 //    * Spawn more cactuses
 //      * add random scale to at least one
+//      * also we need to be able to spawn 1, 2 or 3 in a row
 //    * fix reset visual bug
 //    * add background music
 //    * add jump sound
