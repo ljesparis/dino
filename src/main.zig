@@ -2,6 +2,14 @@ const std = @import("std");
 const assert = std.debug.assert;
 const rl = @import("raylib");
 
+fn getScreenWidth() f32 {
+    return @floatFromInt(rl.getScreenWidth());
+}
+
+fn getScreenHeight() f32 {
+    return @floatFromInt(rl.getScreenHeight());
+}
+
 const Handle = struct {
     idx: u32,
     gen: u32,
@@ -123,7 +131,7 @@ const Entity = struct {
     animation_timer: f32 = 0,
 
     // texture stuff
-    image_scale: i32 = 1,
+    image_scale: f32 = 1.0,
 
     handle: Handle = undefined,
 };
@@ -133,7 +141,8 @@ const WHEIGHT = 500;
 const MAX_ENTITIES = 1024;
 const MAX_TEXTURES = 2;
 
-const DEFAULT_SCALING: i32 = 2;
+const DINO_SCALING: f32 = 2.0;
+const CACTUS_SCALING: f32 = 1.6;
 
 fn Queries(entity_type: EntityType) type {
     return struct {
@@ -151,7 +160,7 @@ const cactus_queries = Queries(.CACTUS);
 const dino_queries = Queries(.DINO);
 
 // CACTUS
-const CACTUS_SPAWN_DELAY: f32 = 4.0;
+const CACTUS_SPAWN_DELAY: f32 = 2.0;
 fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
 
@@ -160,13 +169,15 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
         game_state.cactus_spawn_timer = 0;
         const spawn_count: usize = @intCast(game_state.rand.intRangeAtMost(i8, 1, 3));
         for (0..spawn_count) |i| {
-            const index: i32 = @intCast(i);
+            const index: f32 = @floatFromInt(i);
+            const width: f32 = @floatFromInt(texture.width);
+            const height: f32 = @floatFromInt(texture.height);
             game_state.entities.add(Entity{
-                .image_scale = DEFAULT_SCALING,
+                .image_scale = CACTUS_SCALING,
                 .entity_type = .CACTUS,
                 .position = .init(
-                    @floatFromInt(rl.getScreenWidth() - texture.width + 10 - (index * texture.width * 2)),
-                    @floatFromInt(rl.getScreenHeight() - texture.height * DEFAULT_SCALING),
+                    getScreenWidth() - width - (index * width * CACTUS_SCALING),
+                    getScreenHeight() - height * CACTUS_SCALING,
                 ),
                 .velocity = .init(-200, 0),
             });
@@ -184,7 +195,7 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
                 cactus.position = cactus.position.add(
                     cactus.velocity.multiply(.init(dt, 0)),
                 );
-                const outside_screen: f32 = @floatFromInt(0 - texture.width * cactus.image_scale - 10);
+                const outside_screen: f32 = @floatFromInt(0 - texture.width - 10);
                 if (cactus.position.x < outside_screen) {
                     game_state.entities.remove(cactus.handle);
                 }
@@ -203,8 +214,7 @@ fn onCactusDraw(game_state: *GameState) void {
             .CACTUS => {
                 const cactus: *Entity = entity.?;
                 if (!game_state.entities.isValid(cactus.handle)) continue;
-                const scaling: f32 = @floatFromInt(cactus.image_scale);
-                rl.drawTextureEx(texture, cactus.position, 0, scaling, .black);
+                rl.drawTextureEx(texture, cactus.position, 0, CACTUS_SCALING, .black);
             },
             else => {},
         }
@@ -216,7 +226,7 @@ fn onCactusDraw(game_state: *GameState) void {
 const DINO_RUN_FRAMES: [2]u8 = .{ 24, 48 };
 const DINO_IDLE_FRAMES: [2]u8 = .{ 0, 72 };
 const DINO_GRAVITY: i32 = 2000;
-const DINO_JUMP: i32 = -600;
+const DINO_JUMP: i32 = -650;
 const DINO_TOTAL_FRAMES: i32 = 4;
 const DINO_ANIMATION_TIMEOUT: f32 = 0.1;
 
@@ -226,7 +236,8 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
     const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
     const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
 
-    const floor_pos: f32 = @floatFromInt(rl.getScreenHeight() - dino_texture.height * dino.image_scale);
+    const texture_height: f32 = @floatFromInt(dino_texture.height);
+    const floor_pos: f32 = getScreenHeight() - texture_height * dino.image_scale;
     var grounded: bool = dino.position.y >= floor_pos;
 
     dino.velocity = dino.velocity.add(
@@ -269,7 +280,7 @@ fn onDinoDraw(game_state: *GameState) void {
 
     const width: f32 = @floatFromInt(texture.width);
     const height: f32 = @floatFromInt(texture.height);
-    const scale: f32 = @floatFromInt(dino.image_scale);
+    const scale: f32 = dino.image_scale;
 
     // which part of the texture to display
     const player_source: rl.Rectangle = .init(
@@ -292,12 +303,13 @@ fn onDinoDraw(game_state: *GameState) void {
 fn onCollision(game_state: *GameState) void {
     const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
     const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
+
     const dino_width: f32 = @floatFromInt(@divExact(dino_texture.width, DINO_TOTAL_FRAMES));
     const dino_radius: f32 = dino_width / 1.1;
 
     const cactus_texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
     const cactus_width: f32 = @floatFromInt(cactus_texture.width);
-    const cactus_radius: f32 = cactus_width / 1.1;
+    const cactus_radius: f32 = cactus_width / 3.0;
 
     var it = game_state.entities.iterator();
     var entity = it.next();
@@ -343,13 +355,14 @@ const GameState = struct {
         var self: Self = .{};
         const dino_texture = try rl.loadTexture("assets/dino.png");
         const cactus_texture = try rl.loadTexture("assets/cactus.png");
+        const texture_height: f32 = @floatFromInt(dino_texture.height);
         self.entities.add(Entity{
             .entity_type = .DINO,
             .animation_timer = 0.5,
             .current_frame = 0,
             .frame_index = 0,
-            .image_scale = DEFAULT_SCALING,
-            .position = .init(50, @floatFromInt(rl.getScreenHeight() - dino_texture.height)),
+            .image_scale = DINO_SCALING,
+            .position = .init(50, getScreenHeight() - texture_height),
             .velocity = .init(0, 0),
         });
         self.textures_2D.add(Resource{
