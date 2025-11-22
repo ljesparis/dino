@@ -151,39 +151,64 @@ const cactus_queries = Queries(.CACTUS);
 const dino_queries = Queries(.DINO);
 
 // CACTUS
+const CACTUS_SPAWN_DELAY: f32 = 4.0;
 fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
+
     const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
-    var cactus: ?*Entity = game_state.entities.getByQuery(cactus_queries.getEntity);
-    if (cactus == null) {
-        game_state.entities.add(Entity{
-            .image_scale = DEFAULT_SCALING,
-            .entity_type = .CACTUS,
-            .position = .init(
-                @floatFromInt(rl.getScreenWidth() - texture.width),
-                @floatFromInt(rl.getScreenHeight() - texture.height * DEFAULT_SCALING),
-            ),
-            .velocity = .init(-200, 0),
-        });
-        return;
+    if (game_state.cactus_spawn_timer > CACTUS_SPAWN_DELAY) {
+        game_state.cactus_spawn_timer = 0;
+        const spawn_count: usize = @intCast(game_state.rand.intRangeAtMost(i8, 1, 3));
+        for (0..spawn_count) |i| {
+            const index: i32 = @intCast(i);
+            game_state.entities.add(Entity{
+                .image_scale = DEFAULT_SCALING,
+                .entity_type = .CACTUS,
+                .position = .init(
+                    @floatFromInt(rl.getScreenWidth() - texture.width + 10 - (index * texture.width * 2)),
+                    @floatFromInt(rl.getScreenHeight() - texture.height * DEFAULT_SCALING),
+                ),
+                .velocity = .init(-200, 0),
+            });
+        }
     }
 
-    cactus.?.position = cactus.?.position.add(
-        cactus.?.velocity.multiply(.init(dt, 0)),
-    );
-
-    const outside_screen: f32 = @floatFromInt(0 - texture.width * cactus.?.image_scale + 10);
-    if (cactus.?.position.x < outside_screen) {
-        game_state.entities.remove(cactus.?.handle);
+    game_state.cactus_spawn_timer += dt;
+    var it = game_state.entities.iterator();
+    var entity = it.next();
+    while (entity != null) : (entity = it.next()) {
+        switch (entity.?.entity_type) {
+            .CACTUS => {
+                var cactus: *Entity = entity.?;
+                if (!game_state.entities.isValid(cactus.handle)) continue;
+                cactus.position = cactus.position.add(
+                    cactus.velocity.multiply(.init(dt, 0)),
+                );
+                const outside_screen: f32 = @floatFromInt(0 - texture.width * cactus.image_scale - 10);
+                if (cactus.position.x < outside_screen) {
+                    game_state.entities.remove(cactus.handle);
+                }
+            },
+            else => {},
+        }
     }
 }
 
 fn onCactusDraw(game_state: *GameState) void {
-    const cactus: ?*Entity = game_state.entities.getByQuery(cactus_queries.getEntity);
-    if (cactus == null) return;
     const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
-    const scaling: f32 = @floatFromInt(cactus.?.image_scale);
-    rl.drawTextureEx(texture, cactus.?.position, 0, scaling, .black);
+    var it = game_state.entities.iterator();
+    var entity = it.next();
+    while (entity != null) : (entity = it.next()) {
+        switch (entity.?.entity_type) {
+            .CACTUS => {
+                const cactus: *Entity = entity.?;
+                if (!game_state.entities.isValid(cactus.handle)) continue;
+                const scaling: f32 = @floatFromInt(cactus.image_scale);
+                rl.drawTextureEx(texture, cactus.position, 0, scaling, .black);
+            },
+            else => {},
+        }
+    }
 }
 // CACTUS
 
@@ -236,26 +261,6 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
     } else if (!grounded) {
         dino.current_frame = DINO_IDLE_FRAMES[0];
     }
-
-    // collisions
-    // we're going to always have a cactus.
-    const cactus: ?*Entity = game_state.entities.getByQuery(cactus_queries.getEntity);
-    if (cactus == null) return;
-    const cactus_texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
-
-    const cactus_width: f32 = @floatFromInt(cactus_texture.width);
-    const cactus_radius: f32 = cactus_width / 1.1;
-    const dino_width: f32 = @floatFromInt(@divExact(dino_texture.width, DINO_TOTAL_FRAMES));
-    const dino_radius: f32 = dino_width / 1.1;
-    if (rl.checkCollisionCircles(
-        dino.position,
-        dino_radius,
-        cactus.?.position,
-        cactus_radius,
-    )) {
-        dino.current_frame = @intCast(DINO_IDLE_FRAMES[1]);
-        game_state.game_over = true;
-    }
 }
 
 fn onDinoDraw(game_state: *GameState) void {
@@ -283,6 +288,40 @@ fn onDinoDraw(game_state: *GameState) void {
 }
 // DINO
 
+// COLLISIONS
+fn onCollision(game_state: *GameState) void {
+    const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
+    const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
+    const dino_width: f32 = @floatFromInt(@divExact(dino_texture.width, DINO_TOTAL_FRAMES));
+    const dino_radius: f32 = dino_width / 1.1;
+
+    const cactus_texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
+    const cactus_width: f32 = @floatFromInt(cactus_texture.width);
+    const cactus_radius: f32 = cactus_width / 1.1;
+
+    var it = game_state.entities.iterator();
+    var entity = it.next();
+    while (entity != null) : (entity = it.next()) {
+        if (!game_state.entities.isValid(entity.?.handle)) continue;
+        switch (entity.?.entity_type) {
+            .CACTUS => {
+                const cactus: *Entity = entity.?;
+                if (rl.checkCollisionCircles(
+                    dino.position,
+                    dino_radius,
+                    cactus.position,
+                    cactus_radius,
+                )) {
+                    dino.current_frame = @intCast(DINO_IDLE_FRAMES[1]);
+                    game_state.game_over = true;
+                }
+            },
+            else => {},
+        }
+    }
+}
+// COLLISIONS
+
 fn drawCenteredText(text: [:0]const u8, font_size: i32, y: i32) void {
     const text_width: f32 = @floatFromInt(rl.measureText(text, font_size));
     const x: i32 = @intFromFloat(WWIDTH / 2 - text_width / 2.0);
@@ -294,6 +333,9 @@ const GameState = struct {
     game_over: bool = false,
     entities: HandleMap(Entity, MAX_ENTITIES) = .{},
     textures_2D: HandleMap(Resource, MAX_TEXTURES) = .{},
+
+    cactus_spawn_timer: f32 = 0.0,
+    rand: std.Random = undefined,
 
     const Self = @This();
 
@@ -318,6 +360,8 @@ const GameState = struct {
             .entity_type = .CACTUS,
             .resource = .{ .texture_2d = cactus_texture },
         });
+        var prng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+        self.rand = prng.random();
         return self;
     }
 
@@ -334,6 +378,7 @@ const GameState = struct {
         const dt: f32 = rl.getFrameTime();
         onDinoUpdate(self, dt);
         onCactusUpdate(self, dt);
+        onCollision(self);
 
         if (self.game_over and rl.isKeyPressed(.space)) {
             self.reset();
