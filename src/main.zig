@@ -121,6 +121,8 @@ const Entity = struct {
     current_frame: u8 = 0,
     frame_index: usize = 0,
     animation_timer: f32 = 0,
+
+    // texture stuff
     image_scale: i32 = 1,
 
     handle: Handle = undefined,
@@ -149,8 +151,8 @@ const cactus_query_resource = struct {
 fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
     var cactus: ?*Entity = game_state.entities.getByQuery(cactus_query_entity.q);
+    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_query_resource.q).?.resource.texture_2d;
     if (cactus == null) {
-        const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_query_resource.q).?.resource.texture_2d;
         game_state.entities.add(Entity{
             .image_scale = DEFAULT_SCALING,
             .entity_type = .CACTUS,
@@ -167,8 +169,8 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
         cactus.?.velocity.multiply(.init(dt, 0)),
     );
 
-    if (cactus.?.position.x < -1) {
-        std.debug.print("{} - {}\n", .{ cactus.?.position, cactus.?.handle.idx });
+    const outside_screen: f32 = @floatFromInt(0 - texture.width * cactus.?.image_scale + 10);
+    if (cactus.?.position.x < outside_screen) {
         game_state.entities.remove(cactus.?.handle);
     }
 }
@@ -306,8 +308,8 @@ const GameState = struct {
 
     fn init() !Self {
         var self: Self = .{};
-        const dino_texture = try rl.loadTexture("dino.png");
-        const cactus_texture = try rl.loadTexture("cactus.png");
+        const dino_texture = try rl.loadTexture("assets/dino.png");
+        const cactus_texture = try rl.loadTexture("assets/cactus.png");
         self.entities.add(Entity{
             .entity_type = .DINO,
             .animation_timer = 0.5,
