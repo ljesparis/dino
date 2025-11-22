@@ -345,18 +345,22 @@ const GameState = struct {
         onCactusUpdate(self, dt);
 
         if (self.game_over and rl.isKeyPressed(.space)) {
-            self.game_over = false;
-            var it = self.entities.iterator();
-            var entity = it.next();
-            while (entity != null) : (entity = it.next()) {
-                switch (entity.?.entity_type) {
-                    .DINO => {
-                        entity.?.current_frame = DINO_RUN_FRAMES[0];
-                    },
-                    .CACTUS => {
-                        self.entities.remove(entity.?.handle);
-                    },
-                }
+            self.reset();
+        }
+    }
+
+    fn reset(self: *Self) void {
+        self.game_over = false;
+        var it = self.entities.iterator();
+        var entity = it.next();
+        while (entity != null) : (entity = it.next()) {
+            switch (entity.?.entity_type) {
+                .DINO => {
+                    entity.?.current_frame = DINO_RUN_FRAMES[0];
+                },
+                .CACTUS => {
+                    self.entities.remove(entity.?.handle);
+                },
             }
         }
     }
