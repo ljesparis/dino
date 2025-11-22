@@ -150,8 +150,8 @@ const cactus_query_resource = struct {
 
 fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
-    var cactus: ?*Entity = game_state.entities.getByQuery(cactus_query_entity.q);
     const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_query_resource.q).?.resource.texture_2d;
+    var cactus: ?*Entity = game_state.entities.getByQuery(cactus_query_entity.q);
     if (cactus == null) {
         game_state.entities.add(Entity{
             .image_scale = DEFAULT_SCALING,
@@ -340,10 +340,24 @@ const GameState = struct {
     }
 
     fn onUpdate(self: *Self) void {
-        if (!self.game_over) {
-            const dt: f32 = rl.getFrameTime();
-            onDinoUpdate(self, dt);
-            onCactusUpdate(self, dt);
+        const dt: f32 = rl.getFrameTime();
+        onDinoUpdate(self, dt);
+        onCactusUpdate(self, dt);
+
+        if (self.game_over and rl.isKeyPressed(.space)) {
+            self.game_over = false;
+            var it = self.entities.iterator();
+            var entity = it.next();
+            while (entity != null) : (entity = it.next()) {
+                switch (entity.?.entity_type) {
+                    .DINO => {
+                        entity.?.current_frame = DINO_RUN_FRAMES[0];
+                    },
+                    .CACTUS => {
+                        self.entities.remove(entity.?.handle);
+                    },
+                }
+            }
         }
     }
 
