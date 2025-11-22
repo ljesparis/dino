@@ -135,23 +135,26 @@ const MAX_TEXTURES = 2;
 
 const DEFAULT_SCALING: i32 = 2;
 
+fn Queries(entity_type: EntityType) type {
+    return struct {
+        fn getEntity(entity: *const Entity) bool {
+            return entity.entity_type == entity_type;
+        }
+
+        fn getResources(resource: *const Resource) bool {
+            return resource.entity_type == entity_type;
+        }
+    };
+}
+
+const cactus_queries = Queries(.CACTUS);
+const dino_queries = Queries(.DINO);
+
 // CACTUS
-const cactus_query_entity = struct {
-    pub fn q(entity: *const Entity) bool {
-        return entity.entity_type == .CACTUS;
-    }
-};
-
-const cactus_query_resource = struct {
-    pub fn q(resource: *const Resource) bool {
-        return resource.entity_type == .CACTUS;
-    }
-};
-
 fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
-    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_query_resource.q).?.resource.texture_2d;
-    var cactus: ?*Entity = game_state.entities.getByQuery(cactus_query_entity.q);
+    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
+    var cactus: ?*Entity = game_state.entities.getByQuery(cactus_queries.getEntity);
     if (cactus == null) {
         game_state.entities.add(Entity{
             .image_scale = DEFAULT_SCALING,
@@ -176,9 +179,9 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
 }
 
 fn onCactusDraw(game_state: *GameState) void {
-    const cactus: ?*Entity = game_state.entities.getByQuery(cactus_query_entity.q);
+    const cactus: ?*Entity = game_state.entities.getByQuery(cactus_queries.getEntity);
     if (cactus == null) return;
-    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_query_resource.q).?.resource.texture_2d;
+    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
     const scaling: f32 = @floatFromInt(cactus.?.image_scale);
     rl.drawTextureEx(texture, cactus.?.position, 0, scaling, .black);
 }
@@ -192,23 +195,11 @@ const DINO_JUMP: i32 = -600;
 const DINO_TOTAL_FRAMES: i32 = 4;
 const DINO_ANIMATION_TIMEOUT: f32 = 0.1;
 
-const dino_query_entity = struct {
-    pub fn q(entity: *const Entity) bool {
-        return entity.entity_type == .DINO;
-    }
-};
-
-const dino_query_resource = struct {
-    pub fn q(resource: *const Resource) bool {
-        return resource.entity_type == .DINO;
-    }
-};
-
 fn onDinoUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
 
-    const dino: *Entity = game_state.entities.getByQuery(dino_query_entity.q).?;
-    const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_query_resource.q).?.resource.texture_2d;
+    const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
+    const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
 
     const floor_pos: f32 = @floatFromInt(rl.getScreenHeight() - dino_texture.height * dino.image_scale);
     var grounded: bool = dino.position.y >= floor_pos;
@@ -248,9 +239,9 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
 
     // collisions
     // we're going to always have a cactus.
-    const cactus: ?*Entity = game_state.entities.getByQuery(cactus_query_entity.q);
+    const cactus: ?*Entity = game_state.entities.getByQuery(cactus_queries.getEntity);
     if (cactus == null) return;
-    const cactus_texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_query_resource.q).?.resource.texture_2d;
+    const cactus_texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
 
     const cactus_width: f32 = @floatFromInt(cactus_texture.width);
     const cactus_radius: f32 = cactus_width / 1.1;
@@ -268,8 +259,8 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
 }
 
 fn onDinoDraw(game_state: *GameState) void {
-    const dino: *Entity = game_state.entities.getByQuery(dino_query_entity.q).?;
-    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_query_resource.q).?.resource.texture_2d;
+    const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
+    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
 
     const width: f32 = @floatFromInt(texture.width);
     const height: f32 = @floatFromInt(texture.height);
@@ -378,19 +369,6 @@ const GameState = struct {
 };
 
 // GAME STATE
-
-// TODO:
-//    * Spawn more cactuses
-//      * add random scale to at least one
-//      * also we need to be able to spawn 1, 2 or 3 in a row
-//    * fix reset visual bug
-//    * add background music
-//    * add jump sound
-//    * add score
-//    * add more speed when the dino jump over a cactus
-//    * investigate
-//      * Entity Component System
-//      * Entity Map
 pub fn main() !void {
     rl.initWindow(WWIDTH, WHEIGHT, "google dino clone?");
     var game_state: GameState = try .init();
