@@ -5,14 +5,14 @@ WIP
 
 # TODO
 
-- [ ] Spawn more cactuses
+- [x] Spawn more cactuses
   - [ ] add random scale to at least one
-  - [ ] also we need to be able to spawn 1, 2 or 3 in a row
-- [ ] fix reset visual bug
+  - [x] also we need to be able to spawn 1, 2 or 3 in a row
+- [x] fix reset visual bug
 - [ ] add background music
 - [ ] add jump sound
-- [ ] add score
-- [ ] add more speed when the dino jump over a cactus
+- [x] add score
+- [x] add more speed when the dino jump over a cactus
 - [ ] investigate
   - [ ] Entity Component System
   - [X] Entity Map
