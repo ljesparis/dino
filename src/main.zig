@@ -206,10 +206,10 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
                 .image_scale = CACTUS_SCALING,
                 .entity_type = .CACTUS,
                 .position = .init(
-                    getScreenWidthF() - width - (index * width * CACTUS_SCALING),
+                    getScreenWidthF() - (index * width * CACTUS_SCALING),
                     getScreenHeightF() - height * CACTUS_SCALING,
                 ),
-                .velocity = .init(getSpeedIncAccordingToScore(game_state.score), 0),
+                .velocity = .init(getSpeedBasedOnScore(game_state.score), 0),
             });
         }
     }
