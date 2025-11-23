@@ -486,15 +486,25 @@ const GameState = struct {
 
 pub fn main() !void {
     rl.initWindow(WWIDTH, WHEIGHT, "google dino clone?");
+    rl.initAudioDevice();
     var game_state: GameState = try .init();
+
+    const music = try rl.loadMusicStream("assets/background.ogg");
 
     defer {
         game_state.deinit();
+        music.unload();
         rl.closeWindow();
     }
 
+    const volume: f32 = 0.5;
+    rl.setMusicVolume(music, volume);
+    rl.playMusicStream(music);
+
     rl.setTargetFPS(60);
     while (!rl.windowShouldClose()) {
+        rl.updateMusicStream(music);
+
         game_state.onUpdate();
 
         rl.beginDrawing();
