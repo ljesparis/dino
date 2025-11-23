@@ -127,6 +127,10 @@ const Texture2D = struct {
         self.raylib_texture_2d.unload();
     }
 
+    fn drawTextureEx(self: *Self, position: rl.Vector2, rotation: f32, scale: f32, tint: rl.Color) void {
+        rl.drawTextureEx(self.raylib_texture_2d, position, rotation, scale, tint);
+    }
+
     fn drawPro(
         self: *Self,
         source: rl.Rectangle,
@@ -260,7 +264,7 @@ fn onCactusDraw(game_state: *GameState) void {
             .CACTUS => {
                 const cactus: *Entity = entity.?;
                 if (!game_state.entities.isValid(cactus.handle)) continue;
-                rl.drawTextureEx(texture.raylib_texture_2d, cactus.position, 0, CACTUS_SCALING, .black);
+                texture.drawTextureEx(cactus.position, 0, CACTUS_SCALING, .black);
             },
             else => {},
         }
