@@ -467,9 +467,9 @@ const GameState = struct {
         }
     }
 
-    fn onDraw(self: *Self) !void {
+    fn onDraw(self: *Self) void {
         rl.clearBackground(.{ .r = 204, .g = 224, .b = 255, .a = 0 });
-        try self.drawScore();
+        self.drawScore();
         onDinoDraw(self);
         onCactusDraw(self);
 
@@ -479,12 +479,8 @@ const GameState = struct {
         }
     }
 
-    fn drawScore(self: *Self) !void {
-        var buffer: [32:0]u8 = undefined;
-        const slice = try std.fmt.bufPrint(&buffer, "Score: {}", .{self.score});
-        buffer[slice.len] = 0;
-        const cstr: [:0]const u8 = buffer[0..slice.len :0];
-        rl.drawText(cstr, 10, 10, 20, .black);
+    fn drawScore(self: *Self) void {
+        rl.drawText(rl.textFormat("Score: %d", .{self.score}), 10, 10, 20, .black);
     }
 };
 
@@ -503,6 +499,6 @@ pub fn main() !void {
 
         rl.beginDrawing();
         defer rl.endDrawing();
-        try game_state.onDraw();
+        game_state.onDraw();
     }
 }
