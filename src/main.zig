@@ -166,6 +166,10 @@ const Music = struct {
         rl.playMusicStream(self.raylib_music);
     }
 
+    fn stop(self: *Self) void {
+        rl.stopMusicStream(self.raylib_music);
+    }
+
     fn update(self: *Self) void {
         rl.updateMusicStream(self.raylib_music);
     }
@@ -188,6 +192,10 @@ const Sound = struct {
 
     fn play(self: *Self) void {
         rl.playSound(self.raylib_sound);
+    }
+
+    fn stop(self: *Self) void {
+        rl.stopSound(self.raylib_sound);
     }
 };
 
@@ -400,6 +408,7 @@ fn onDinoDraw(game_state: *GameState) void {
 }
 
 fn onCollision(game_state: *GameState) void {
+    if (game_state.game_over) return;
     const dino: *Entity = game_state.entities.getByQuery(
         dino_queries.getEntity,
     ).?;
@@ -429,6 +438,10 @@ fn onCollision(game_state: *GameState) void {
                     cactus.position,
                     cactus_radius,
                 )) {
+                    if (!game_state.play_game_over_sound) {
+                        game_state.play_game_over_sound = true;
+                    }
+                    game_state.background_music.stop();
                     dino.current_frame = @intCast(DINO_IDLE_FRAMES[1]);
                     game_state.game_over = true;
                 }
@@ -460,6 +473,9 @@ const GameState = struct {
     jump_sound: Sound = undefined,
     background_music: Music = undefined,
 
+    play_game_over_sound: bool = false,
+    game_over_sound: Sound = undefined,
+
     const Self = @This();
 
     fn init() !Self {
@@ -472,6 +488,7 @@ const GameState = struct {
         self.background_music.play();
         self.background_music.setVolume(0.5);
         self.jump_sound = try Sound.load("assets/jump.wav");
+        self.game_over_sound = try Sound.load("assets/game_over.ogg");
         self.entities.add(Entity{
             .entity_type = .DINO,
             .animation_timer = 0.5,
@@ -495,6 +512,7 @@ const GameState = struct {
         }
 
         self.jump_sound.unload();
+        self.game_over_sound.unload();
         self.background_music.unload();
     }
 
@@ -505,12 +523,20 @@ const GameState = struct {
         onCactusUpdate(self, dt);
         onCollision(self);
 
+        if (self.play_game_over_sound) {
+            self.game_over_sound.play();
+            self.play_game_over_sound = false;
+        }
+
         if (self.game_over and rl.isKeyPressed(.space)) {
             self.reset();
         }
     }
 
     fn reset(self: *Self) void {
+        self.game_over_sound.stop();
+        self.background_music.play();
+        self.play_game_over_sound = false;
         self.game_over = false;
         self.score = 0;
         var it = self.entities.iterator();
@@ -551,6 +577,7 @@ pub fn main() !void {
 
     defer {
         game_state.deinit();
+        rl.closeAudioDevice();
         rl.closeWindow();
     }
 
