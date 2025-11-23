@@ -9,8 +9,8 @@ WIP
   - [ ] add random scale to at least one
   - [x] also we need to be able to spawn 1, 2 or 3 in a row
 - [x] fix reset visual bug
-- [ ] add background music
-- [ ] add jump sound
+- [x] add background music
+- [x] add jump sound
 - [x] add score
 - [x] add more speed when the dino jump over a cactus
 - [ ] investigate
