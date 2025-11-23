@@ -156,46 +156,47 @@ const CACTUS_SCALING: f32 = 1.6;
 const CACTUS_SPEED: f32 = 200.0;
 const CACTUS_SPEED_INC: f32 = 50.0;
 
-fn getSpeedBasedOnScore(score: i32) f32 {
-    var speed = CACTUS_SPEED;
-    if (score >= 5) {
-        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 2;
-    }
-    if (score >= 20) {
-        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 3;
-    }
-    if (score >= 30) {
-        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 4;
-    }
-    if (score >= 40) {
-        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 5;
-    }
-    return -1.0 * speed;
-}
+const CactusProperties = struct {
+    spawn_delay: f32,
+    speed: f32,
 
-fn getSpawnDelayBasedOnScore(score: i32) f32 {
-    var delay: f32 = 2.0;
-    if (score >= 5) {
-        delay = 1.7;
-    }
-    if (score >= 20) {
-        delay = 1.4;
-    }
-    if (score >= 30) {
-        delay = 1.1;
-    }
-    if (score >= 40) {
-        delay = 0.8;
-    }
+    const Self = @This();
 
-    return delay;
-}
+    inline fn buildBasedOnScore(score: i32) Self {
+        var delay: f32 = CACTUS_SPAWN_DELAY;
+        var speed = CACTUS_SPEED;
+
+        if (score >= 5) {
+            delay = 1.7;
+            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 2;
+        }
+        if (score >= 20) {
+            delay = 1.4;
+            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 3;
+        }
+        if (score >= 30) {
+            delay = 1.1;
+            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 4;
+        }
+        if (score >= 40) {
+            delay = 0.8;
+            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 5;
+        }
+
+        return .{
+            .spawn_delay = delay,
+            .speed = -1.0 * speed,
+        };
+    }
+};
 
 fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
 
+    const prop: CactusProperties = .buildBasedOnScore(game_state.score);
+
     const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
-    if (game_state.cactus_spawn_timer > getSpawnDelayBasedOnScore(game_state.score)) {
+    if (game_state.cactus_spawn_timer > prop.spawn_delay) {
         game_state.cactus_spawn_timer = 0;
         const spawn_count: usize = @intCast(game_state.rand.intRangeAtMost(i8, 1, 3));
         for (0..spawn_count) |i| {
@@ -209,7 +210,7 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
                     getScreenWidthF() - (index * width * CACTUS_SCALING),
                     getScreenHeightF() - height * CACTUS_SCALING,
                 ),
-                .velocity = .init(getSpeedBasedOnScore(game_state.score), 0),
+                .velocity = .init(prop.speed, 0),
             });
         }
     }
