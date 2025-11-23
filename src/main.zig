@@ -2,11 +2,11 @@ const std = @import("std");
 const assert = std.debug.assert;
 const rl = @import("raylib");
 
-fn getScreenWidth() f32 {
+fn getScreenWidthF() f32 {
     return @floatFromInt(rl.getScreenWidth());
 }
 
-fn getScreenHeight() f32 {
+fn getScreenHeightF() f32 {
     return @floatFromInt(rl.getScreenHeight());
 }
 
@@ -156,21 +156,46 @@ const CACTUS_SCALING: f32 = 1.6;
 const CACTUS_SPEED: f32 = 200.0;
 const CACTUS_SPEED_INC: f32 = 50.0;
 
-fn getSpeedIncAccordingToScore(score: i32) f32 {
-    return -1 * switch (score) {
-        5 => CACTUS_SPEED + CACTUS_SPEED_INC * 2,
-        10 => CACTUS_SPEED + CACTUS_SPEED_INC * 3,
-        15 => CACTUS_SPEED + CACTUS_SPEED_INC * 4,
-        20 => CACTUS_SPEED + CACTUS_SPEED_INC * 5,
-        else => CACTUS_SPEED,
-    };
+fn getSpeedBasedOnScore(score: i32) f32 {
+    var speed = CACTUS_SPEED;
+    if (score >= 5) {
+        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 2;
+    }
+    if (score >= 20) {
+        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 3;
+    }
+    if (score >= 30) {
+        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 4;
+    }
+    if (score >= 40) {
+        speed = CACTUS_SPEED + CACTUS_SPEED_INC * 5;
+    }
+    return -1.0 * speed;
+}
+
+fn getSpawnDelayBasedOnScore(score: i32) f32 {
+    var delay: f32 = 2.0;
+    if (score >= 5) {
+        delay = 1.7;
+    }
+    if (score >= 20) {
+        delay = 1.4;
+    }
+    if (score >= 30) {
+        delay = 1.1;
+    }
+    if (score >= 40) {
+        delay = 0.8;
+    }
+
+    return delay;
 }
 
 fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
 
     const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
-    if (game_state.cactus_spawn_timer > CACTUS_SPAWN_DELAY) {
+    if (game_state.cactus_spawn_timer > getSpawnDelayBasedOnScore(game_state.score)) {
         game_state.cactus_spawn_timer = 0;
         const spawn_count: usize = @intCast(game_state.rand.intRangeAtMost(i8, 1, 3));
         for (0..spawn_count) |i| {
@@ -181,8 +206,8 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
                 .image_scale = CACTUS_SCALING,
                 .entity_type = .CACTUS,
                 .position = .init(
-                    getScreenWidth() - width - (index * width * CACTUS_SCALING),
-                    getScreenHeight() - height * CACTUS_SCALING,
+                    getScreenWidthF() - width - (index * width * CACTUS_SCALING),
+                    getScreenHeightF() - height * CACTUS_SCALING,
                 ),
                 .velocity = .init(getSpeedIncAccordingToScore(game_state.score), 0),
             });
@@ -203,6 +228,7 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
                 const outside_screen: f32 = @floatFromInt(0 - texture.width - 10);
                 if (cactus.position.x < outside_screen) {
                     game_state.entities.remove(cactus.handle);
+                    game_state.score += 1;
                 }
             },
             else => {},
@@ -240,7 +266,7 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
     const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
 
     const texture_height: f32 = @floatFromInt(dino_texture.height);
-    const floor_pos: f32 = getScreenHeight() - texture_height * dino.image_scale;
+    const floor_pos: f32 = getScreenHeightF() - texture_height * dino.image_scale;
     var grounded: bool = dino.position.y >= floor_pos;
 
     dino.velocity = dino.velocity.add(
@@ -365,7 +391,7 @@ const GameState = struct {
             .current_frame = 0,
             .frame_index = 0,
             .image_scale = DINO_SCALING,
-            .position = .init(50, getScreenHeight() - texture_height),
+            .position = .init(50, getScreenHeightF() - texture_height),
             .velocity = .init(0, 0),
         });
         self.textures_2D.add(Resource{
