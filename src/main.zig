@@ -175,14 +175,23 @@ const Music = struct {
     }
 };
 
+const SoundType = enum(u1) {
+    JUMP,
+    GAME_OVER,
+};
+
 const Sound = struct {
+    sound_type: SoundType,
     raylib_sound: rl.Sound,
+
+    handle: Handle = undefined,
 
     const Self = @This();
 
-    fn load(path_name: [:0]const u8) !Self {
+    fn load(path_name: [:0]const u8, sound_type: SoundType) !Self {
         return .{
             .raylib_sound = try rl.loadSound(path_name),
+            .sound_type = sound_type,
         };
     }
 
@@ -343,6 +352,13 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
     const dino_texture: *Texture2D = game_state.textures_2D.getByQuery(
         dino_queries.getTextures,
     ).?;
+    const jump_sound: *Sound = game_state.sounds.getByQuery(
+        struct {
+            fn getSound(sound: *const Sound) bool {
+                return sound.sound_type == .JUMP;
+            }
+        }.getSound,
+    ).?;
 
     const floor_pos: f32 = getScreenHeightF() - dino_texture.heightF() * dino.image_scale;
     var grounded: bool = dino.position.y >= floor_pos;
@@ -353,7 +369,7 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
 
     if (grounded and rl.isKeyPressed(.space)) {
         dino.velocity = .init(0, DINO_JUMP);
-        game_state.jump_sound.play();
+        jump_sound.play();
         grounded = false;
     }
 
@@ -417,7 +433,7 @@ fn onCollision(game_state: *GameState) void {
     ).?;
 
     const dino_width: f32 = dino_texture.widthF() / DINO_TOTAL_FRAMES;
-    const dino_radius: f32 = dino_width / 1.1;
+    const dino_radius: f32 = dino_width / 1.0;
 
     const cactus_texture: *Texture2D = game_state.textures_2D.getByQuery(
         cactus_queries.getTextures,
@@ -457,24 +473,24 @@ fn drawCenteredText(text: [:0]const u8, font_size: i32, y: i32) void {
     rl.drawText(text, x, WHEIGHT / 2 + y, font_size, .black);
 }
 
-const WWIDTH = 600;
-const WHEIGHT = 500;
+const WWIDTH = 1000;
+const WHEIGHT = 600;
 const MAX_ENTITIES = 1024;
 const MAX_TEXTURES = 2;
+const MAX_SOUND = 2;
 const GameState = struct {
     game_over: bool = false,
     entities: HandleMap(Entity, MAX_ENTITIES) = .{},
     textures_2D: HandleMap(Texture2D, MAX_TEXTURES) = .{},
+    sounds: HandleMap(Sound, MAX_SOUND) = .{},
 
     score: i32 = 0,
     cactus_spawn_timer: f32 = 0.0,
     rand: std.Random = undefined,
 
-    jump_sound: Sound = undefined,
-    background_music: Music = undefined,
-
     play_game_over_sound: bool = false,
-    game_over_sound: Sound = undefined,
+
+    background_music: Music = undefined,
 
     const Self = @This();
 
@@ -487,8 +503,8 @@ const GameState = struct {
         self.background_music = try Music.load("assets/background.ogg");
         self.background_music.play();
         self.background_music.setVolume(0.5);
-        self.jump_sound = try Sound.load("assets/jump.wav");
-        self.game_over_sound = try Sound.load("assets/game_over.ogg");
+        self.sounds.add(try Sound.load("assets/jump.wav", .JUMP));
+        self.sounds.add(try Sound.load("assets/game_over.ogg", .GAME_OVER));
         self.entities.add(Entity{
             .entity_type = .DINO,
             .animation_timer = 0.5,
@@ -504,15 +520,23 @@ const GameState = struct {
     }
 
     fn deinit(self: *Self) void {
-        // unload textures
-        var it = self.textures_2D.iterator();
-        var texture = it.next();
-        while (texture != null) : (texture = it.next()) {
-            texture.?.unload();
+        {
+            // unload textures
+            var it = self.textures_2D.iterator();
+            var texture = it.next();
+            while (texture != null) : (texture = it.next()) {
+                texture.?.unload();
+            }
         }
 
-        self.jump_sound.unload();
-        self.game_over_sound.unload();
+        {
+            var it = self.sounds.iterator();
+            var sound = it.next();
+            while (sound != null) : (sound = it.next()) {
+                sound.?.unload();
+            }
+        }
+
         self.background_music.unload();
     }
 
@@ -524,7 +548,7 @@ const GameState = struct {
         onCollision(self);
 
         if (self.play_game_over_sound) {
-            self.game_over_sound.play();
+            self.getGameOverSound().play();
             self.play_game_over_sound = false;
         }
 
@@ -534,7 +558,7 @@ const GameState = struct {
     }
 
     fn reset(self: *Self) void {
-        self.game_over_sound.stop();
+        self.getGameOverSound().stop();
         self.background_music.play();
         self.play_game_over_sound = false;
         self.game_over = false;
@@ -553,20 +577,37 @@ const GameState = struct {
         }
     }
 
+    fn getGameOverSound(self: *Self) *Sound {
+        return self.sounds.getByQuery(
+            struct {
+                fn getSound(sound: *const Sound) bool {
+                    return sound.sound_type == .GAME_OVER;
+                }
+            }.getSound,
+        ).?;
+    }
+
+    fn playGameOverSound(self: *Self) void {
+        self.getGameOverSound().play();
+    }
+
     fn onDraw(self: *Self) void {
         rl.clearBackground(.{ .r = 204, .g = 224, .b = 255, .a = 0 });
         self.drawScore();
         onDinoDraw(self);
         onCactusDraw(self);
-
-        if (self.game_over) {
-            drawCenteredText("Game Over", 30, 0);
-            drawCenteredText("Press 'space' key to restart the game", 20, 40);
-        }
+        self.drawGameOver();
     }
 
     fn drawScore(self: *Self) void {
         rl.drawText(rl.textFormat("Score: %d", .{self.score}), 10, 10, 20, .black);
+    }
+
+    fn drawGameOver(self: *Self) void {
+        if (self.game_over) {
+            drawCenteredText("Game Over", 30, 0);
+            drawCenteredText("Press 'space' key to restart the game", 20, 40);
+        }
     }
 };
 
