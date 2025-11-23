@@ -100,22 +100,42 @@ const EntityType = enum(u1) {
     CACTUS,
 };
 
-const Resource = struct {
+const Texture2D = struct {
     entity_type: EntityType,
-    handle: Handle = undefined,
+    raylib_texture_2d: rl.Texture2D,
 
-    resource: union(enum) {
-        texture_2d: rl.Texture2D,
-        audio: rl.Sound,
-    },
+    handle: Handle = undefined,
 
     const Self = @This();
 
+    fn init(raylib_texture: rl.Texture2D, entity_type: EntityType) Self {
+        return .{
+            .raylib_texture_2d = raylib_texture,
+            .entity_type = entity_type,
+        };
+    }
+
+    inline fn widthF(self: *const Self) f32 {
+        return @floatFromInt(self.raylib_texture_2d.width);
+    }
+
+    inline fn heightF(self: *const Self) f32 {
+        return @floatFromInt(self.raylib_texture_2d.height);
+    }
+
     fn unload(self: *Self) void {
-        switch (self.resource) {
-            .texture_2d => self.resource.texture_2d.unload(),
-            .audio => self.resource.audio.unload(),
-        }
+        self.raylib_texture_2d.unload();
+    }
+
+    fn drawPro(
+        self: *Self,
+        source: rl.Rectangle,
+        dest: rl.Rectangle,
+        origin: rl.Vector2,
+        rotation: f32,
+        tint: rl.Color,
+    ) void {
+        self.raylib_texture_2d.drawPro(source, dest, origin, rotation, tint);
     }
 };
 
@@ -142,7 +162,7 @@ fn Queries(entity_type: EntityType) type {
             return entity.entity_type == entity_type;
         }
 
-        fn getResources(resource: *const Resource) bool {
+        fn getTextures(resource: *const Texture2D) bool {
             return resource.entity_type == entity_type;
         }
     };
@@ -153,39 +173,31 @@ const dino_queries = Queries(.DINO);
 
 const CACTUS_SPAWN_DELAY: f32 = 2.0;
 const CACTUS_SCALING: f32 = 1.6;
-const CACTUS_SPEED: f32 = 200.0;
-const CACTUS_SPEED_INC: f32 = 50.0;
+const CACTUS_BASE_SPEED: f32 = -200.0;
 
 const CactusProperties = struct {
     spawn_delay: f32,
-    speed: f32,
 
     const Self = @This();
 
     inline fn buildBasedOnScore(score: i32) Self {
         var delay: f32 = CACTUS_SPAWN_DELAY;
-        var speed = CACTUS_SPEED;
 
         if (score >= 5) {
             delay = 1.7;
-            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 2;
         }
         if (score >= 20) {
             delay = 1.4;
-            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 3;
         }
         if (score >= 30) {
             delay = 1.1;
-            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 4;
         }
         if (score >= 40) {
             delay = 0.8;
-            speed = CACTUS_SPEED + CACTUS_SPEED_INC * 5;
         }
 
         return .{
             .spawn_delay = delay,
-            .speed = -1.0 * speed,
         };
     }
 };
@@ -194,23 +206,23 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
 
     const prop: CactusProperties = .buildBasedOnScore(game_state.score);
+    const texture: *Texture2D = game_state.textures_2D.getByQuery(
+        cactus_queries.getTextures,
+    ).?;
 
-    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
     if (game_state.cactus_spawn_timer > prop.spawn_delay) {
         game_state.cactus_spawn_timer = 0;
         const spawn_count: usize = @intCast(game_state.rand.intRangeAtMost(i8, 1, 3));
         for (0..spawn_count) |i| {
             const index: f32 = @floatFromInt(i);
-            const width: f32 = @floatFromInt(texture.width);
-            const height: f32 = @floatFromInt(texture.height);
             game_state.entities.add(Entity{
                 .image_scale = CACTUS_SCALING,
                 .entity_type = .CACTUS,
                 .position = .init(
-                    getScreenWidthF() - (index * width * CACTUS_SCALING),
-                    getScreenHeightF() - height * CACTUS_SCALING,
+                    getScreenWidthF() - (index * texture.widthF() * CACTUS_SCALING),
+                    getScreenHeightF() - texture.heightF() * CACTUS_SCALING,
                 ),
-                .velocity = .init(prop.speed, 0),
+                .velocity = .init(CACTUS_BASE_SPEED, 0),
             });
         }
     }
@@ -226,7 +238,7 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
                 cactus.position = cactus.position.add(
                     cactus.velocity.multiply(.init(dt, 0)),
                 );
-                const outside_screen: f32 = @floatFromInt(0 - texture.width - 10);
+                const outside_screen: f32 = 0.0 - texture.widthF() - 10.0;
                 if (cactus.position.x < outside_screen) {
                     game_state.entities.remove(cactus.handle);
                     game_state.score += 1;
@@ -238,7 +250,9 @@ fn onCactusUpdate(game_state: *GameState, dt: f32) void {
 }
 
 fn onCactusDraw(game_state: *GameState) void {
-    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
+    const texture: *Texture2D = game_state.textures_2D.getByQuery(
+        cactus_queries.getTextures,
+    ).?;
     var it = game_state.entities.iterator();
     var entity = it.next();
     while (entity != null) : (entity = it.next()) {
@@ -246,7 +260,7 @@ fn onCactusDraw(game_state: *GameState) void {
             .CACTUS => {
                 const cactus: *Entity = entity.?;
                 if (!game_state.entities.isValid(cactus.handle)) continue;
-                rl.drawTextureEx(texture, cactus.position, 0, CACTUS_SCALING, .black);
+                rl.drawTextureEx(texture.raylib_texture_2d, cactus.position, 0, CACTUS_SCALING, .black);
             },
             else => {},
         }
@@ -263,11 +277,14 @@ const DINO_SCALING: f32 = 2.0;
 fn onDinoUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
 
-    const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
-    const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
+    const dino: *Entity = game_state.entities.getByQuery(
+        dino_queries.getEntity,
+    ).?;
+    const dino_texture: *Texture2D = game_state.textures_2D.getByQuery(
+        dino_queries.getTextures,
+    ).?;
 
-    const texture_height: f32 = @floatFromInt(dino_texture.height);
-    const floor_pos: f32 = getScreenHeightF() - texture_height * dino.image_scale;
+    const floor_pos: f32 = getScreenHeightF() - dino_texture.heightF() * dino.image_scale;
     var grounded: bool = dino.position.y >= floor_pos;
 
     dino.velocity = dino.velocity.add(
@@ -304,38 +321,46 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
 }
 
 fn onDinoDraw(game_state: *GameState) void {
-    const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
-    const texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
+    const dino: *Entity = game_state.entities.getByQuery(
+        dino_queries.getEntity,
+    ).?;
+    const texture: *Texture2D = game_state.textures_2D.getByQuery(
+        dino_queries.getTextures,
+    ).?;
 
-    const width: f32 = @floatFromInt(texture.width);
-    const height: f32 = @floatFromInt(texture.height);
     const scale: f32 = dino.image_scale;
 
     // which part of the texture to display
     const player_source: rl.Rectangle = .init(
         @floatFromInt(dino.current_frame),
         0,
-        width / DINO_TOTAL_FRAMES,
-        height,
+        texture.widthF() / DINO_TOTAL_FRAMES,
+        texture.heightF(),
     );
     const player_dest: rl.Rectangle = .init(
         dino.position.x,
         dino.position.y,
-        width * scale / DINO_TOTAL_FRAMES,
-        height * scale,
+        texture.widthF() * scale / DINO_TOTAL_FRAMES,
+        texture.heightF() * scale,
     );
-    rl.drawTexturePro(texture, player_source, player_dest, .{ .x = 0, .y = 0 }, 0, .black);
+    texture.drawPro(player_source, player_dest, .{ .x = 0, .y = 0 }, 0, .black);
 }
 
 fn onCollision(game_state: *GameState) void {
-    const dino: *Entity = game_state.entities.getByQuery(dino_queries.getEntity).?;
-    const dino_texture: rl.Texture2D = game_state.textures_2D.getByQuery(dino_queries.getResources).?.resource.texture_2d;
+    const dino: *Entity = game_state.entities.getByQuery(
+        dino_queries.getEntity,
+    ).?;
+    const dino_texture: *Texture2D = game_state.textures_2D.getByQuery(
+        dino_queries.getTextures,
+    ).?;
 
-    const dino_width: f32 = @floatFromInt(@divExact(dino_texture.width, DINO_TOTAL_FRAMES));
+    const dino_width: f32 = dino_texture.widthF() / DINO_TOTAL_FRAMES;
     const dino_radius: f32 = dino_width / 1.1;
 
-    const cactus_texture: rl.Texture2D = game_state.textures_2D.getByQuery(cactus_queries.getResources).?.resource.texture_2d;
-    const cactus_width: f32 = @floatFromInt(cactus_texture.width);
+    const cactus_texture: *Texture2D = game_state.textures_2D.getByQuery(
+        cactus_queries.getTextures,
+    ).?;
+    const cactus_width: f32 = cactus_texture.widthF();
     const cactus_radius: f32 = cactus_width / 3.0;
 
     var it = game_state.entities.iterator();
@@ -373,7 +398,7 @@ const MAX_TEXTURES = 2;
 const GameState = struct {
     game_over: bool = false,
     entities: HandleMap(Entity, MAX_ENTITIES) = .{},
-    textures_2D: HandleMap(Resource, MAX_TEXTURES) = .{},
+    textures_2D: HandleMap(Texture2D, MAX_TEXTURES) = .{},
 
     score: i32 = 0,
     cactus_spawn_timer: f32 = 0.0,
@@ -383,25 +408,18 @@ const GameState = struct {
 
     fn init() !Self {
         var self: Self = .{};
-        const dino_texture = try rl.loadTexture("assets/dino.png");
-        const cactus_texture = try rl.loadTexture("assets/cactus.png");
-        const texture_height: f32 = @floatFromInt(dino_texture.height);
+        const dino_texture: Texture2D = .init(try rl.loadTexture("assets/dino.png"), .DINO);
+        const cactus_texture: Texture2D = .init(try rl.loadTexture("assets/cactus.png"), .CACTUS);
+        self.textures_2D.add(dino_texture);
+        self.textures_2D.add(cactus_texture);
         self.entities.add(Entity{
             .entity_type = .DINO,
             .animation_timer = 0.5,
             .current_frame = 0,
             .frame_index = 0,
             .image_scale = DINO_SCALING,
-            .position = .init(50, getScreenHeightF() - texture_height),
+            .position = .init(50, getScreenHeightF() - dino_texture.heightF()),
             .velocity = .init(0, 0),
-        });
-        self.textures_2D.add(Resource{
-            .entity_type = .DINO,
-            .resource = .{ .texture_2d = dino_texture },
-        });
-        self.textures_2D.add(Resource{
-            .entity_type = .CACTUS,
-            .resource = .{ .texture_2d = cactus_texture },
         });
         var prng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
         self.rand = prng.random();
@@ -476,7 +494,6 @@ pub fn main() !void {
     }
 
     rl.setTargetFPS(60);
-
     while (!rl.windowShouldClose()) {
         game_state.onUpdate();
 
