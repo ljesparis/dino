@@ -143,6 +143,54 @@ const Texture2D = struct {
     }
 };
 
+const Music = struct {
+    raylib_music: rl.Music,
+
+    const Self = @This();
+
+    fn load(path_name: [:0]const u8) !Self {
+        return .{
+            .raylib_music = try rl.loadMusicStream(path_name),
+        };
+    }
+
+    fn unload(self: *Self) void {
+        self.raylib_music.unload();
+    }
+
+    fn setVolume(self: *Self, volume: f32) void {
+        rl.setMusicVolume(self.raylib_music, volume);
+    }
+
+    fn play(self: *Self) void {
+        rl.playMusicStream(self.raylib_music);
+    }
+
+    fn update(self: *Self) void {
+        rl.updateMusicStream(self.raylib_music);
+    }
+};
+
+const Sound = struct {
+    raylib_sound: rl.Sound,
+
+    const Self = @This();
+
+    fn load(path_name: [:0]const u8) !Self {
+        return .{
+            .raylib_sound = try rl.loadSound(path_name),
+        };
+    }
+
+    fn unload(self: *Self) void {
+        self.raylib_sound.unload();
+    }
+
+    fn play(self: *Self) void {
+        rl.playSound(self.raylib_sound);
+    }
+};
+
 const Entity = struct {
     entity_type: EntityType,
 
@@ -297,6 +345,7 @@ fn onDinoUpdate(game_state: *GameState, dt: f32) void {
 
     if (grounded and rl.isKeyPressed(.space)) {
         dino.velocity = .init(0, DINO_JUMP);
+        game_state.jump_sound.play();
         grounded = false;
     }
 
@@ -408,6 +457,9 @@ const GameState = struct {
     cactus_spawn_timer: f32 = 0.0,
     rand: std.Random = undefined,
 
+    jump_sound: Sound = undefined,
+    background_music: Music = undefined,
+
     const Self = @This();
 
     fn init() !Self {
@@ -416,6 +468,10 @@ const GameState = struct {
         const cactus_texture: Texture2D = .init(try rl.loadTexture("assets/cactus.png"), .CACTUS);
         self.textures_2D.add(dino_texture);
         self.textures_2D.add(cactus_texture);
+        self.background_music = try Music.load("assets/background.ogg");
+        self.background_music.play();
+        self.background_music.setVolume(0.5);
+        self.jump_sound = try Sound.load("assets/jump.wav");
         self.entities.add(Entity{
             .entity_type = .DINO,
             .animation_timer = 0.5,
@@ -437,9 +493,13 @@ const GameState = struct {
         while (texture != null) : (texture = it.next()) {
             texture.?.unload();
         }
+
+        self.jump_sound.unload();
+        self.background_music.unload();
     }
 
     fn onUpdate(self: *Self) void {
+        self.background_music.update();
         const dt: f32 = rl.getFrameTime();
         onDinoUpdate(self, dt);
         onCactusUpdate(self, dt);
@@ -489,22 +549,12 @@ pub fn main() !void {
     rl.initAudioDevice();
     var game_state: GameState = try .init();
 
-    const music = try rl.loadMusicStream("assets/background.ogg");
-
     defer {
         game_state.deinit();
-        music.unload();
         rl.closeWindow();
     }
 
-    const volume: f32 = 0.5;
-    rl.setMusicVolume(music, volume);
-    rl.playMusicStream(music);
-
-    rl.setTargetFPS(60);
     while (!rl.windowShouldClose()) {
-        rl.updateMusicStream(music);
-
         game_state.onUpdate();
 
         rl.beginDrawing();
