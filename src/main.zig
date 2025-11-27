@@ -95,9 +95,10 @@ fn HandleMap(comptime T: type, capacity: i32) type {
     };
 }
 
-const EntityType = enum(u1) {
+const EntityType = enum(u3) {
     DINO,
     CACTUS,
+    CLOUDS,
 };
 
 const Texture2D = struct {
@@ -108,9 +109,9 @@ const Texture2D = struct {
 
     const Self = @This();
 
-    fn init(raylib_texture: rl.Texture2D, entity_type: EntityType) Self {
+    fn init(path_name: [:0]const u8, entity_type: EntityType) !Self {
         return .{
-            .raylib_texture_2d = raylib_texture,
+            .raylib_texture_2d = try rl.loadTexture(path_name),
             .entity_type = entity_type,
         };
     }
@@ -237,8 +238,90 @@ fn Queries(entity_type: EntityType) type {
     };
 }
 
+const clouds_queries = Queries(.CLOUDS);
 const cactus_queries = Queries(.CACTUS);
 const dino_queries = Queries(.DINO);
+
+const CLOUD_FRAMES: [4]u8 = .{ 0, 24, 48, 72 };
+const CLOUD_TOTAL_FRAMES: f32 = 4.0;
+const CLOUDS_SPAWN_DELAY: f32 = 1.3;
+const CLOUDS_SCALING: f32 = 5.0;
+const CLOUDS_SPEED: f32 = -120.0;
+var clouds_spawn_timer: f32 = 0.0;
+fn onCloudsUpdate(game_state: *GameState, dt: f32) void {
+    if (game_state.game_over) return;
+
+    const texture: *Texture2D = game_state.textures_2D.getByQuery(
+        clouds_queries.getTextures,
+    ).?;
+
+    if (clouds_spawn_timer > CLOUDS_SPAWN_DELAY) {
+        clouds_spawn_timer = 0;
+        const rand_frame_index: usize = @intCast(game_state.rand.intRangeAtMost(i8, 1, 4));
+        const y_position: f32 = @floatFromInt(game_state.rand.intRangeAtMost(i16, 50, 300));
+        game_state.entities.add(Entity{
+            .image_scale = CLOUDS_SCALING,
+            .entity_type = .CLOUDS,
+            .current_frame = @intCast(CLOUD_FRAMES[rand_frame_index - 1]),
+            .position = .init(
+                getScreenWidthF() + texture.widthF(),
+                y_position,
+            ),
+            .velocity = .init(CLOUDS_SPEED, 0),
+        });
+    }
+
+    clouds_spawn_timer += dt;
+    var it = game_state.entities.iterator();
+    var entity = it.next();
+    while (entity != null) : (entity = it.next()) {
+        switch (entity.?.entity_type) {
+            .CLOUDS => {
+                var clouds: *Entity = entity.?;
+                if (!game_state.entities.isValid(clouds.handle)) continue;
+                clouds.position = clouds.position.add(
+                    clouds.velocity.multiply(.init(dt, 0)),
+                );
+                const outside_screen: f32 = 0.0 - texture.widthF() - 10.0;
+                if (clouds.position.x < outside_screen) {
+                    game_state.entities.remove(clouds.handle);
+                }
+            },
+            else => {},
+        }
+    }
+}
+
+fn onCloudsDraw(game_state: *GameState) void {
+    const texture: *Texture2D = game_state.textures_2D.getByQuery(
+        clouds_queries.getTextures,
+    ).?;
+
+    var it = game_state.entities.iterator();
+    var entity = it.next();
+    while (entity != null) : (entity = it.next()) {
+        switch (entity.?.entity_type) {
+            .CLOUDS => {
+                const cloud: *Entity = entity.?;
+                if (!game_state.entities.isValid(cloud.handle)) continue;
+                const source: rl.Rectangle = .init(
+                    @floatFromInt(cloud.current_frame),
+                    0,
+                    texture.widthF() / CLOUD_TOTAL_FRAMES,
+                    texture.heightF(),
+                );
+                const dst: rl.Rectangle = .init(
+                    cloud.position.x,
+                    cloud.position.y,
+                    texture.widthF() * cloud.image_scale / CLOUD_TOTAL_FRAMES,
+                    texture.heightF() * cloud.image_scale,
+                );
+                texture.drawPro(source, dst, .{ .x = 0, .y = 0 }, 0, .black);
+            },
+            else => {},
+        }
+    }
+}
 
 const CACTUS_SPAWN_DELAY: f32 = 2.0;
 const CACTUS_SCALING: f32 = 1.6;
@@ -258,11 +341,8 @@ const CactusProperties = struct {
         if (score >= 20) {
             delay = 1.4;
         }
-        if (score >= 30) {
-            delay = 1.1;
-        }
         if (score >= 40) {
-            delay = 0.8;
+            delay = 1.1;
         }
 
         return .{
@@ -339,7 +419,7 @@ fn onCactusDraw(game_state: *GameState) void {
 const DINO_RUN_FRAMES: [2]u8 = .{ 24, 48 };
 const DINO_IDLE_FRAMES: [2]u8 = .{ 0, 72 };
 const DINO_GRAVITY: i32 = 2000;
-const DINO_JUMP: i32 = -680;
+const DINO_JUMP: i32 = -750;
 const DINO_TOTAL_FRAMES: i32 = 4;
 const DINO_ANIMATION_TIMEOUT: f32 = 0.1;
 const DINO_SCALING: f32 = 2.0;
@@ -405,8 +485,6 @@ fn onDinoDraw(game_state: *GameState) void {
         dino_queries.getTextures,
     ).?;
 
-    const scale: f32 = dino.image_scale;
-
     // which part of the texture to display
     const player_source: rl.Rectangle = .init(
         @floatFromInt(dino.current_frame),
@@ -417,8 +495,8 @@ fn onDinoDraw(game_state: *GameState) void {
     const player_dest: rl.Rectangle = .init(
         dino.position.x,
         dino.position.y,
-        texture.widthF() * scale / DINO_TOTAL_FRAMES,
-        texture.heightF() * scale,
+        texture.widthF() * dino.image_scale / DINO_TOTAL_FRAMES,
+        texture.heightF() * dino.image_scale,
     );
     texture.drawPro(player_source, player_dest, .{ .x = 0, .y = 0 }, 0, .black);
 }
@@ -476,7 +554,7 @@ fn drawCenteredText(text: [:0]const u8, font_size: i32, y: i32) void {
 const WWIDTH = 1000;
 const WHEIGHT = 600;
 const MAX_ENTITIES = 1024;
-const MAX_TEXTURES = 2;
+const MAX_TEXTURES = 3;
 const MAX_SOUND = 2;
 const GameState = struct {
     game_over: bool = false,
@@ -496,10 +574,10 @@ const GameState = struct {
 
     fn init() !Self {
         var self: Self = .{};
-        const dino_texture: Texture2D = .init(try rl.loadTexture("assets/dino.png"), .DINO);
-        const cactus_texture: Texture2D = .init(try rl.loadTexture("assets/cactus.png"), .CACTUS);
+        const dino_texture: Texture2D = try .init("assets/dino.png", .DINO);
         self.textures_2D.add(dino_texture);
-        self.textures_2D.add(cactus_texture);
+        self.textures_2D.add(try .init("assets/cactus.png", .CACTUS));
+        self.textures_2D.add(try .init("assets/clouds.png", .CLOUDS));
         self.background_music = try Music.load("assets/background.ogg");
         self.background_music.play();
         self.background_music.setVolume(0.5);
@@ -543,6 +621,8 @@ const GameState = struct {
     fn onUpdate(self: *Self) void {
         self.background_music.update();
         const dt: f32 = rl.getFrameTime();
+
+        onCloudsUpdate(self, dt);
         onDinoUpdate(self, dt);
         onCactusUpdate(self, dt);
         onCollision(self);
@@ -573,6 +653,7 @@ const GameState = struct {
                 .CACTUS => {
                     self.entities.remove(entity.?.handle);
                 },
+                else => {},
             }
         }
     }
@@ -594,6 +675,7 @@ const GameState = struct {
     fn onDraw(self: *Self) void {
         rl.clearBackground(.{ .r = 204, .g = 224, .b = 255, .a = 0 });
         self.drawScore();
+        onCloudsDraw(self);
         onDinoDraw(self);
         onCactusDraw(self);
         self.drawGameOver();
