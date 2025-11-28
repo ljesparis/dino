@@ -128,7 +128,13 @@ const Texture2D = struct {
         self.raylib_texture_2d.unload();
     }
 
-    fn drawTextureEx(self: *Self, position: rl.Vector2, rotation: f32, scale: f32, tint: rl.Color) void {
+    fn drawTextureEx(
+        self: *Self,
+        position: rl.Vector2,
+        rotation: f32,
+        scale: f32,
+        tint: rl.Color,
+    ) void {
         rl.drawTextureEx(self.raylib_texture_2d, position, rotation, scale, tint);
     }
 
@@ -247,7 +253,20 @@ const CLOUD_TOTAL_FRAMES: f32 = 4.0;
 const CLOUDS_SPAWN_DELAY: f32 = 1.3;
 const CLOUDS_SCALING: f32 = 5.0;
 const CLOUDS_SPEED: f32 = -120.0;
+const CLOUD_Y_POS: [3]u16 = .{ 100, 200, 300 };
 var clouds_spawn_timer: f32 = 0.0;
+var last_cloud_y_pos: u16 = 0;
+
+fn getCloudY(game_state: *GameState) u16 {
+    var cloud_y: u16 = last_cloud_y_pos;
+    while (cloud_y == last_cloud_y_pos) {
+        cloud_y = CLOUD_Y_POS[@intCast(game_state.rand.intRangeAtMost(i16, 1, 3) - 1)];
+    }
+
+    last_cloud_y_pos = cloud_y;
+    return cloud_y;
+}
+
 fn onCloudsUpdate(game_state: *GameState, dt: f32) void {
     if (game_state.game_over) return;
 
@@ -258,14 +277,14 @@ fn onCloudsUpdate(game_state: *GameState, dt: f32) void {
     if (clouds_spawn_timer > CLOUDS_SPAWN_DELAY) {
         clouds_spawn_timer = 0;
         const rand_frame_index: usize = @intCast(game_state.rand.intRangeAtMost(i8, 1, 4));
-        const y_position: f32 = @floatFromInt(game_state.rand.intRangeAtMost(i16, 50, 300));
+        const cloud_y_position: f32 = @floatFromInt(getCloudY(game_state));
         game_state.entities.add(Entity{
             .image_scale = CLOUDS_SCALING,
             .entity_type = .CLOUDS,
             .current_frame = @intCast(CLOUD_FRAMES[rand_frame_index - 1]),
             .position = .init(
                 getScreenWidthF() + texture.widthF(),
-                y_position,
+                cloud_y_position,
             ),
             .velocity = .init(CLOUDS_SPEED, 0),
         });
@@ -580,7 +599,7 @@ const GameState = struct {
         self.textures_2D.add(try .init("assets/clouds.png", .CLOUDS));
         self.background_music = try Music.load("assets/background.ogg");
         self.background_music.play();
-        self.background_music.setVolume(0.5);
+        self.background_music.setVolume(0.2);
         self.sounds.add(try Sound.load("assets/jump.wav", .JUMP));
         self.sounds.add(try Sound.load("assets/game_over.ogg", .GAME_OVER));
         self.entities.add(Entity{
