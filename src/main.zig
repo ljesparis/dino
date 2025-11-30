@@ -47,7 +47,7 @@ fn HandleMap(comptime T: type, capacity: i32) type {
         }
 
         fn remove(self: *Self, handle: Handle) void {
-            if (handle.idx <= 0 or handle.idx >= capacity) return;
+            if (handle.idx < 0 or handle.idx > capacity) return;
             var item: *T = &self.entities[@intCast(handle.idx)];
             if (item.handle.idx == handle.idx) {
                 self.unused_items[handle.idx] = self.next_unused;
@@ -253,7 +253,7 @@ const CLOUD_TOTAL_FRAMES: f32 = 4.0;
 const CLOUDS_SPAWN_DELAY: f32 = 1.3;
 const CLOUDS_SCALING: f32 = 5.0;
 const CLOUDS_SPEED: f32 = -120.0;
-const CLOUD_Y_POS: [3]u16 = .{ 100, 200, 300 };
+const CLOUD_Y_POS: [3]u16 = .{ 25, 100, 200 };
 var clouds_spawn_timer: f32 = 0.0;
 var last_cloud_y_pos: u16 = 0;
 
@@ -575,6 +575,7 @@ const WHEIGHT = 600;
 const MAX_ENTITIES = 1024;
 const MAX_TEXTURES = 3;
 const MAX_SOUND = 2;
+
 const GameState = struct {
     game_over: bool = false,
     entities: HandleMap(Entity, MAX_ENTITIES) = .{},
